@@ -39,17 +39,21 @@ class RolePermissionTest extends TestCase
 
         $superAdmin = Role::where('slug', Role::SUPER_ADMIN)->first();
 
-        $this->assertCount(37, $superAdmin->permissions);
+        $this->assertCount(49, $superAdmin->permissions);
     }
 
     public function test_permission_seeder_creates_granular_permissions(): void
     {
         $this->seed(PermissionSeeder::class);
 
-        $this->assertDatabaseCount('permissions', 37);
+        $this->assertDatabaseCount('permissions', 49);
         $this->assertDatabaseHas('permissions', ['slug' => 'cadets.import']);
         $this->assertDatabaseHas('permissions', ['slug' => 'applications.shortlist']);
         $this->assertDatabaseHas('permissions', ['slug' => 'users.assign-role']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.import']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.promote-to-cadet']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'email.campaigns.create']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'email.settings.manage']);
     }
 
     public function test_role_can_be_assigned_permissions(): void

@@ -156,6 +156,30 @@ class UserManagementTest extends TestCase
         $this->assertTrue(Hash::check('NewPassword#123', $target->fresh()->password));
     }
 
+    public function test_super_admin_can_delete_user(): void
+    {
+        $target = User::factory()->create(['name' => 'Delete Me']);
+        $token = $this->authToken($this->actor(Role::SUPER_ADMIN, ['users.delete']));
+
+        $this->withToken($token)->deleteJson("/api/v1/users/{$target->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $target->id)
+            ->assertJsonPath('data.deleted', true);
+
+        $this->assertSoftDeleted('users', ['id' => $target->id]);
+    }
+
+    public function test_authenticated_user_can_view_own_profile(): void
+    {
+        $user = $this->actor(Role::SUPER_ADMIN, ['users.view'], ['name' => 'Logged In User', 'email' => 'me@example.com']);
+        $token = $this->authToken($user);
+
+        $this->withToken($token)->getJson('/api/v1/profile')
+            ->assertOk()
+            ->assertJsonPath('data.id', $user->id)
+            ->assertJsonPath('data.email', 'me@example.com');
+    }
+
     public function test_super_admin_can_assign_roles(): void
     {
         $target = User::factory()->create();

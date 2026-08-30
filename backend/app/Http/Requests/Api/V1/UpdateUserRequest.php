@@ -30,8 +30,13 @@ class UpdateUserRequest extends FormRequest
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)->withoutTrashed()],
             'phone' => ['nullable', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($userId)->withoutTrashed()],
             'status' => ['sometimes', 'string', Rule::in(['active', 'disabled'])],
+            'cadet_number' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9\-\/]+$/', Rule::unique('users', 'cadet_number')->ignore($userId)->withoutTrashed()],
+            'rank_id' => ['nullable', 'integer', 'exists:ranks,id'],
             'province_id' => ['nullable', 'integer', 'exists:provinces,id'],
             'district_id' => ['nullable', 'integer', 'exists:districts,id'],
+            'local_level' => ['nullable', 'string', 'max:255'],
+            'ward_number' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'photo' => ['nullable', 'image', 'max:2048'],
         ];
     }
 }

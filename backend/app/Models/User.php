@@ -24,8 +24,13 @@ use Laravel\Sanctum\HasApiTokens;
     'phone',
     'password',
     'status',
+    'cadet_number',
+    'rank_id',
     'province_id',
     'district_id',
+    'local_level',
+    'ward_number',
+    'photo_path',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -53,6 +58,16 @@ class User extends Authenticatable
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'user_roles');
+    }
+
+    /**
+     * Get the rank held by the user.
+     *
+     * @return BelongsTo<Rank, $this>
+     */
+    public function rank(): BelongsTo
+    {
+        return $this->belongsTo(Rank::class);
     }
 
     /**

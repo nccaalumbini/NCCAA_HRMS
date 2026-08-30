@@ -3,11 +3,15 @@
 namespace App\Services;
 
 use App\Enums\AccessScopeType;
+use App\Models\Role;
 use App\Models\User;
+use App\Support\GeographicHierarchyValidator;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class UserService
@@ -84,6 +88,24 @@ class UserService
     {
         $this->assertWithinScope($actor, $data);
 
+        if (! empty($data['role_ids'])) {
+            $this->assertCanAssignRoles($actor, $data['role_ids']);
+        }
+
+        GeographicHierarchyValidator::validate($data);
+
+        $scope = $this->accessScope->resolve($actor);
+        if ($scope === AccessScopeType::Province && empty($data['province_id'])) {
+            $data['province_id'] = $actor->province_id;
+        } elseif ($scope === AccessScopeType::District) {
+            if (empty($data['province_id']) && $actor->province_id) {
+                $data['province_id'] = $actor->province_id;
+            }
+            if (empty($data['district_id']) && $actor->district_id) {
+                $data['district_id'] = $actor->district_id;
+            }
+        }
+
         $user = User::create([
             'name' => $data['name'],
             'username' => $data['username'],
@@ -91,8 +113,13 @@ class UserService
             'phone' => $data['phone'] ?? null,
             'password' => $data['password'],
             'status' => $data['status'] ?? 'active',
+            'cadet_number' => $data['cadet_number'] ?? null,
+            'rank_id' => $data['rank_id'] ?? null,
             'province_id' => $data['province_id'] ?? null,
             'district_id' => $data['district_id'] ?? null,
+            'local_level' => $data['local_level'] ?? null,
+            'ward_number' => $data['ward_number'] ?? null,
+            'photo_path' => $this->storePhoto($data['photo'] ?? null),
         ]);
 
         if (! empty($data['role_ids'])) {
@@ -101,7 +128,7 @@ class UserService
 
         $this->auditLogger->record($actor, 'created', $user, null, null, $user->toArray());
 
-        return $user->load(['roles', 'province', 'district']);
+        return $user->load(['roles', 'province', 'district', 'rank']);
     }
 
     /**
@@ -114,7 +141,13 @@ class UserService
         $this->assertCanManage($actor, $user);
         $this->assertWithinScope($actor, $data);
 
-        $old = $user->only(['name', 'username', 'email', 'phone', 'status', 'province_id', 'district_id']);
+        $mergedGeo = [
+            'province_id' => $data['province_id'] ?? $user->province_id,
+            'district_id' => $data['district_id'] ?? $user->district_id,
+        ];
+        GeographicHierarchyValidator::validate($mergedGeo);
+
+        $old = $user->only(['name', 'username', 'email', 'phone', 'status', 'cadet_number', 'rank_id', 'province_id', 'district_id', 'local_level', 'ward_number']);
 
         $user->fill([
             'name' => $data['name'] ?? $user->name,
@@ -122,14 +155,41 @@ class UserService
             'email' => $data['email'] ?? $user->email,
             'phone' => $data['phone'] ?? $user->phone,
             'status' => $data['status'] ?? $user->status,
+            'cadet_number' => $data['cadet_number'] ?? $user->cadet_number,
+            'rank_id' => $data['rank_id'] ?? $user->rank_id,
             'province_id' => $data['province_id'] ?? $user->province_id,
             'district_id' => $data['district_id'] ?? $user->district_id,
+            'local_level' => $data['local_level'] ?? $user->local_level,
+            'ward_number' => $data['ward_number'] ?? $user->ward_number,
         ]);
+
+        if (! empty($data['photo'])) {
+            $user->photo_path = $this->storePhoto($data['photo'], $user->photo_path);
+        }
+
         $user->save();
 
         $this->auditLogger->record($actor, 'updated', $user, oldValues: $old, newValues: $user->only(array_keys($old)));
 
-        return $user->load(['roles', 'province', 'district']);
+        return $user->load(['roles', 'province', 'district', 'rank']);
+    }
+
+    /**
+     * Store an uploaded profile photo under a randomized filename, replacing any prior file.
+     */
+    protected function storePhoto(?UploadedFile $photo, ?string $previousPath = null): ?string
+    {
+        if ($photo === null) {
+            return $previousPath;
+        }
+
+        $path = $photo->store('avatars', 'public');
+
+        if ($previousPath) {
+            Storage::disk('public')->delete($previousPath);
+        }
+
+        return $path;
     }
 
     /**
@@ -140,6 +200,7 @@ class UserService
     public function assignRoles(User $actor, User $user, array $roleIds): User
     {
         $this->assertCanManage($actor, $user);
+        $this->assertCanAssignRoles($actor, $roleIds);
 
         $old = $user->roles->pluck('id')->all();
         $user->roles()->sync($roleIds);
@@ -172,6 +233,15 @@ class UserService
             'province_id' => $provinceId,
             'district_id' => $districtId,
         ], fn ($v) => $v !== null));
+
+        if ($roleIds !== []) {
+            $this->assertCanAssignRoles($actor, $roleIds);
+        }
+
+        GeographicHierarchyValidator::validate([
+            'province_id' => $provinceId,
+            'district_id' => $districtId,
+        ]);
 
         $old = ['province_id' => $user->province_id, 'district_id' => $user->district_id];
 
@@ -242,6 +312,21 @@ class UserService
     }
 
     /**
+     * Soft delete a user within the actor's scope.
+     */
+    public function delete(User $actor, User $user): User
+    {
+        $this->assertCanManage($actor, $user);
+
+        $old = $user->only(['name', 'username', 'email', 'status']);
+        $user->delete();
+
+        $this->auditLogger->record($actor, 'deleted', $user, oldValues: $old, newValues: ['deleted' => true]);
+
+        return $user;
+    }
+
+    /**
      * Throw if the actor lacks permission to manage the target user.
      */
     protected function assertCanManage(User $actor, User $user): void
@@ -252,17 +337,73 @@ class UserService
             return;
         }
 
-        if ($scope === AccessScopeType::Province && $user->province_id === $actor->province_id) {
-            return;
+        if ($this->accessScope->isUnrestricted($user)) {
+            throw ValidationException::withMessages([
+                'user' => ['You do not have permission to manage this user.'],
+            ]);
         }
 
-        if ($scope === AccessScopeType::District && $user->district_id === $actor->district_id) {
-            return;
+        if ($scope === AccessScopeType::Province) {
+            if ($user->hasAnyRole([Role::SUPER_ADMIN, Role::CENTRAL_ADMIN])) {
+                throw ValidationException::withMessages([
+                    'user' => ['You do not have permission to manage this user.'],
+                ]);
+            }
+
+            if ($user->province_id === $actor->province_id) {
+                return;
+            }
+        }
+
+        if ($scope === AccessScopeType::District) {
+            if ($user->hasAnyRole([Role::SUPER_ADMIN, Role::CENTRAL_ADMIN, Role::PROVINCE_ADMIN])) {
+                throw ValidationException::withMessages([
+                    'user' => ['You do not have permission to manage this user.'],
+                ]);
+            }
+
+            if ($user->district_id === $actor->district_id) {
+                return;
+            }
         }
 
         throw ValidationException::withMessages([
             'user' => ['You do not have permission to manage this user.'],
         ]);
+    }
+
+    /**
+     * Ensure the actor is authorized to assign the requested roles.
+     *
+     * @param  array<int, int>  $roleIds
+     */
+    protected function assertCanAssignRoles(User $actor, array $roleIds): void
+    {
+        if (empty($roleIds)) {
+            return;
+        }
+
+        $scope = $this->accessScope->resolve($actor);
+
+        if ($scope === AccessScopeType::All) {
+            return;
+        }
+
+        $roles = Role::whereIn('id', $roleIds)->get();
+
+        foreach ($roles as $role) {
+            if (in_array($role->slug, [Role::SUPER_ADMIN, Role::CENTRAL_ADMIN], true)) {
+                throw ValidationException::withMessages([
+                    'role_ids' => ['You do not have authority to assign the '.$role->name.' role.'],
+                ]);
+            }
+
+            if ($scope === AccessScopeType::District && in_array($role->slug, [Role::PROVINCE_ADMIN, Role::RECRUITMENT_MANAGER], true)) {
+                throw ValidationException::withMessages([
+                    'role_ids' => ['You do not have authority to assign the '.$role->name.' role.'],
+                ]);
+            }
+        }
     }
 
     /**
@@ -284,17 +425,35 @@ class UserService
             return;
         }
 
-        if (! empty($data['province_id']) && $scope === AccessScopeType::Province
-            && ! in_array($data['province_id'], $geography['province_ids'], true)) {
-            throw ValidationException::withMessages([
-                'province_id' => ['Province is outside your scope.'],
-            ]);
+        if ($scope === AccessScopeType::Province) {
+            if (array_key_exists('province_id', $data) && $data['province_id'] !== null
+                && ! in_array((int) $data['province_id'], $geography['province_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'province_id' => ['Province is outside your scope.'],
+                ]);
+            }
+
+            if (! empty($data['district_id']) && ! in_array((int) $data['district_id'], $geography['district_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'district_id' => ['District is outside your scope.'],
+                ]);
+            }
         }
 
-        if (! empty($data['district_id']) && ! in_array($data['district_id'], $geography['district_ids'], true)) {
-            throw ValidationException::withMessages([
-                'district_id' => ['District is outside your scope.'],
-            ]);
+        if ($scope === AccessScopeType::District) {
+            if (array_key_exists('province_id', $data) && $data['province_id'] !== null
+                && $actor->province_id !== null && (int) $data['province_id'] !== (int) $actor->province_id) {
+                throw ValidationException::withMessages([
+                    'province_id' => ['Province is outside your scope.'],
+                ]);
+            }
+
+            if (array_key_exists('district_id', $data) && $data['district_id'] !== null
+                && ! in_array((int) $data['district_id'], $geography['district_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'district_id' => ['District is outside your scope.'],
+                ]);
+            }
         }
     }
 }

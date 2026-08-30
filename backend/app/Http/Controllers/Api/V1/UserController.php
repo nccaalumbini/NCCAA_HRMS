@@ -12,6 +12,7 @@ use App\Services\UserService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
@@ -103,6 +104,29 @@ class UserController extends Controller
     }
 
     /**
+     * View the currently authenticated user's complete profile.
+     */
+    public function profile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return ApiResponse::success($this->userArray($user));
+    }
+
+    /**
+     * Soft delete a user.
+     */
+    public function destroy(Request $request, User $user): JsonResponse
+    {
+        $this->users->delete($request->user(), $user);
+
+        return ApiResponse::success([
+            'id' => $user->id,
+            'deleted' => true,
+        ], 'User deleted successfully.');
+    }
+
+    /**
      * Assign roles to a user.
      */
     public function assignRoles(AssignRolesRequest $request, User $user): JsonResponse
@@ -142,7 +166,7 @@ class UserController extends Controller
      */
     protected function userArray(User $user): array
     {
-        $user->loadMissing(['roles', 'province', 'district']);
+        $user->loadMissing(['roles', 'province', 'district', 'rank']);
 
         return [
             'id' => $user->id,
@@ -152,6 +176,17 @@ class UserController extends Controller
             'email' => $user->email,
             'phone' => $user->phone,
             'status' => $user->status,
+            'cadet_number' => $user->cadet_number,
+            'rank_id' => $user->rank_id,
+            'rank' => $user->rank?->only(['id', 'name_en', 'name_ne', 'short_code']),
+            'province' => $user->province ? [
+                'id' => $user->province->id,
+                'name' => $user->province->name_en,
+            ] : null,
+            'district' => $user->district ? [
+                'id' => $user->district->id,
+                'name' => $user->district->name_en,
+            ] : null,
             'roles' => $user->roles->map(fn ($role) => [
                 'id' => $role->id,
                 'name' => $role->name,
@@ -164,6 +199,9 @@ class UserController extends Controller
                 ->values(),
             'province_id' => $user->province_id,
             'district_id' => $user->district_id,
+            'local_level' => $user->local_level,
+            'ward_number' => $user->ward_number,
+            'photo_url' => $user->photo_path ? Storage::disk('public')->url($user->photo_path) : null,
             'last_login_at' => $user->last_login_at,
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,

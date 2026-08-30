@@ -54,4 +54,21 @@ class Role extends Model
     {
         return $this->belongsToMany(User::class, 'user_roles');
     }
+
+    /**
+     * Determine whether this role is one of the built-in system roles.
+     */
+    public function isSystemRole(): bool
+    {
+        return in_array($this->slug, [
+            self::SUPER_ADMIN,
+            self::CENTRAL_ADMIN,
+            self::PROVINCE_ADMIN,
+            self::DISTRICT_ADMIN,
+            self::RECRUITMENT_MANAGER,
+            self::CONTENT_MANAGER,
+            self::REPORT_MANAGER,
+            self::CADET,
+        ], true);
+    }
 }

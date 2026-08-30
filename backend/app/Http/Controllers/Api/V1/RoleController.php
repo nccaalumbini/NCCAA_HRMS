@@ -76,6 +76,12 @@ class RoleController extends Controller
     {
         $data = $request->validated();
 
+        if ($role->isSystemRole() && isset($data['slug']) && $data['slug'] !== $role->slug) {
+            throw ValidationException::withMessages([
+                'slug' => ['System role slugs cannot be changed.'],
+            ]);
+        }
+
         $role->update(array_filter([
             'name' => $data['name'] ?? $role->name,
             'slug' => $data['slug'] ?? $role->slug,
@@ -96,6 +102,12 @@ class RoleController extends Controller
      */
     public function destroy(Role $role): JsonResponse
     {
+        if ($role->isSystemRole()) {
+            throw ValidationException::withMessages([
+                'role' => ['System roles cannot be deleted.'],
+            ]);
+        }
+
         if ($role->users()->exists()) {
             throw ValidationException::withMessages([
                 'role' => ['Cannot delete a role that still has users assigned.'],

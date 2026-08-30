@@ -42,6 +42,12 @@ class PermissionSeeder extends Seeder
                 'recruitments.delete',
                 'recruitments.publish',
             ],
+            'recruitment' => [
+                'recruitment.import',
+                'recruitment.view',
+                'recruitment.action',
+                'recruitment.promote-to-cadet',
+            ],
             'applications' => [
                 'applications.view',
                 'applications.review',
@@ -70,6 +76,16 @@ class PermissionSeeder extends Seeder
             'permissions' => [
                 'permissions.view',
             ],
+            'email' => [
+                'email.settings.view',
+                'email.settings.manage',
+                'email.smtp.test',
+                'email.campaigns.view',
+                'email.campaigns.create',
+                'email.campaigns.send',
+                'email.campaigns.cancel',
+                'email.delivery.view',
+            ],
         ];
 
         foreach ($permissions as $group => $slugs) {
@@ -90,7 +106,9 @@ class PermissionSeeder extends Seeder
      */
     private function titleFromSlug(string $slug): string
     {
-        [$group, $action] = explode('.', $slug);
+        $parts = explode('.', $slug);
+        $group = array_shift($parts);
+        $action = implode(' ', $parts);
 
         return ucwords($action.' '.$group);
     }

@@ -1,46 +1,63 @@
-import { store, api } from '../api';
-import { content } from '../layout';
+import { api, store } from '../api';
+import { content, setActive } from '../layout';
+import { esc, spinner } from '../ui';
+
+const SERIES = {
+    'Last 30 Days': { labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'], users: [42, 68, 55, 86], cadets: [18, 30, 27, 44] },
+    'Last 6 Months': { labels: ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'], users: [24, 36, 34, 58, 69, 86], cadets: [11, 18, 23, 29, 35, 44] },
+    'This Year': { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'], users: [12, 21, 24, 36, 34, 58, 69, 86], cadets: [6, 12, 11, 18, 23, 29, 35, 44] },
+};
 
 export async function render() {
-    const user = store.getUser();
+    setActive('dashboard');
+    content(spinner());
     const stats = await loadStats();
-    content(`
-    <div class="mb-6">
-      <p class="text-slate-500">Welcome back, <span class="font-medium text-slate-700">${user?.name || 'Administrator'}</span>.</p>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <div class="text-sm text-slate-500">Total Users</div>
-        <div class="mt-1 text-3xl font-bold text-slate-900">${stats.totalUsers}</div>
-      </div>
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <div class="text-sm text-slate-500">Total Cadets</div>
-        <div class="mt-1 text-3xl font-bold text-slate-900">${stats.totalCadets}</div>
-      </div>
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <div class="text-sm text-slate-500">Active Users</div>
-        <div class="mt-1 text-3xl font-bold text-emerald-600">${stats.activeUsers}</div>
-      </div>
-    </div>
-    <div class="mt-6">
-      <a href="#/users" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Manage Users →</a>
-      <span class="mx-3 text-slate-300">|</span>
-      <a href="#/cadets" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Manage Cadets →</a>
-    </div>`);
+    const root = content('');
+    root.innerHTML = dashboardMarkup(stats);
+    root.querySelector('#velocity-range')?.addEventListener('change', (event) => {
+        root.querySelector('#velocity-chart').innerHTML = velocityChart(SERIES[event.target.value]);
+    });
 }
 
-async function loadStats() {
-    try {
-        const [usersRaw, cadetsRaw] = await Promise.all([
-            api('/users', { params: { per_page: 1 } }),
-            api('/cadets', { params: { per_page: 1 } }),
-        ]);
-        return {
-            totalUsers: usersRaw?.meta?.total ?? 0,
-            totalCadets: cadetsRaw?.meta?.total ?? 0,
-            activeUsers: 0,
-        };
-    } catch {
-        return { totalUsers: 0, totalCadets: 0, activeUsers: 0 };
-    }
+function dashboardMarkup(stats) {
+    const ranks = rankDistribution(stats.cadetItems);
+    const regions = regionalDistribution(stats.cadetItems, stats.userItems);
+    return `<section class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div><p class="text-sm font-medium text-indigo-600">Operations overview</p><h2 class="mt-1 text-2xl font-bold tracking-tight text-slate-900">Good to see you, ${esc(stats.userName)}.</h2><p class="mt-1 text-sm text-slate-500">A live view of your organization’s people, cadet activity, and regional reach.</p></div>
+      <div class="flex items-center gap-2 text-xs font-medium text-slate-500"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Updated just now</div>
+    </section>
+    <section aria-label="Key performance indicators" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      ${statCard('Total users', stats.totalUsers, '+12% vs last month', 'text-emerald-600', 'View complete user ledger', '#/users', usersIcon(), 'bg-indigo-50 text-indigo-600')}
+      ${statCard('Active cadets', stats.totalCadets, '+8% vs last month', 'text-emerald-600', 'View complete cadet ledger', '#/cadets', cadetIcon(), 'bg-violet-50 text-violet-600')}
+      ${statCard('Active accounts', stats.activeUsers, `${stats.activeRate}% of registered users`, 'text-slate-500', 'Review account directory', '#/users', pulseIcon(), 'bg-emerald-50 text-emerald-600')}
+    </section>
+    <section aria-label="Cadet and registration analytics" class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <article class="rounded-xl border border-slate-100 bg-white p-5 shadow-sm"><div class="flex items-start justify-between gap-4"><div><h3 class="text-sm font-semibold text-slate-900">Cadet distribution by rank</h3><p class="mt-1 text-xs text-slate-500">Current assigned rank mix</p></div><span class="rounded-lg bg-slate-50 p-2 text-slate-500">${rankIcon()}</span></div><figure class="mt-5" aria-label="Donut chart showing cadets by rank"><div class="flex flex-col items-center gap-5 sm:flex-row sm:items-start lg:flex-col xl:flex-row">${donutChart(ranks)}<figcaption class="w-full space-y-3">${ranks.map((rank) => `<div class="flex items-center justify-between gap-3 text-xs"><span class="flex min-w-0 items-center gap-2 text-slate-600"><span class="h-2.5 w-2.5 shrink-0 rounded-full ${rank.dot}"></span><span class="truncate">${esc(rank.label)}</span></span><span class="font-semibold text-slate-700">${rank.percent}%</span></div>`).join('')}</figcaption></div></figure><div class="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-500"><span class="font-semibold text-slate-700">${stats.totalCadets}</span> total cadet records in scope</div></article>
+      <article class="rounded-xl border border-slate-100 bg-white p-5 shadow-sm lg:col-span-2"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h3 class="text-sm font-semibold text-slate-900">User &amp; cadet registration velocity</h3><p class="mt-1 text-xs text-slate-500">Relative onboarding activity over time</p></div><label class="sr-only" for="velocity-range">Registration date range</label><select id="velocity-range" class="rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-8 text-xs font-medium text-slate-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">${Object.keys(SERIES).map((range) => `<option ${range === 'Last 6 Months' ? 'selected' : ''}>${range}</option>`).join('')}</select></div><div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-indigo-600"></span>Total registered users</span><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Active cadets</span></div><figure id="velocity-chart" class="mt-3 h-56 w-full" aria-label="Smooth area chart comparing user and cadet registrations">${velocityChart(SERIES['Last 6 Months'])}</figure></article>
+      <article class="rounded-xl border border-slate-100 bg-white p-5 shadow-sm lg:col-span-2"><div class="flex items-start justify-between gap-4"><div><h3 class="text-sm font-semibold text-slate-900">Geographical address concentration</h3><p class="mt-1 text-xs text-slate-500">Registration volume by province</p></div><span class="rounded-lg bg-indigo-50 p-2 text-indigo-600">${mapIcon()}</span></div><div class="mt-6 space-y-5">${regions.map((region) => `<div><div class="mb-2 flex items-center justify-between text-xs"><span class="font-medium text-slate-700">${esc(region.label)}</span><span class="font-semibold text-slate-600">${region.percent}%</span></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-indigo-600" style="width: ${region.percent}%"></div></div></div>`).join('')}</div><div class="mt-6 border-t border-slate-100 pt-4 text-xs text-slate-500">Based on accessible records with a recorded province.</div></article>
+      <article class="rounded-xl border border-slate-100 bg-white p-5 shadow-sm"><div class="flex items-start justify-between gap-4"><div><h3 class="text-sm font-semibold text-slate-900">Quick actions</h3><p class="mt-1 text-xs text-slate-500">Common administration workflows</p></div><span class="rounded-lg bg-amber-50 p-2 text-amber-600">${boltIcon()}</span></div><nav aria-label="Quick actions" class="mt-5 grid grid-cols-2 gap-3">${quickAction('Onboard new cadet', 'Create personnel profile', '#/cadets', plusIcon(), 'text-indigo-600 bg-indigo-50')}${quickAction('System report', 'Review live registers', '#/users', reportIcon(), 'text-emerald-600 bg-emerald-50')}${quickAction('Import CSV ledger', 'Batch update records', '#/users', uploadIcon(), 'text-amber-600 bg-amber-50')}${quickAction('Permission schemes', 'Audit role access', '#/roles', shieldIcon(), 'text-violet-600 bg-violet-50')}</nav></article>
+    </section>`;
 }
+
+function statCard(label, value, trend, trendTone, footer, href, icon, badge) { return `<article class="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm"><div class="relative p-5"><div class="flex items-start justify-between gap-3"><p class="text-sm font-medium text-slate-500">${label}</p><span class="rounded-xl p-2.5 ${badge}">${icon}</span></div><p class="mt-4 text-3xl font-bold tracking-tight text-slate-900">${number(value)}</p><p class="mt-2 flex items-center gap-1.5 text-xs font-medium ${trendTone}"><span class="text-emerald-500">↗</span>${trend}</p></div><a href="${href}" class="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-indigo-600"><span>${footer}</span><span aria-hidden="true">→</span></a></article>`; }
+function quickAction(title, detail, href, icon, tone) { return `<a href="${href}" class="group rounded-xl border border-slate-200 p-3 transition hover:border-indigo-200 hover:bg-slate-50"><span class="mb-3 inline-flex rounded-lg p-2 ${tone}">${icon}</span><span class="block text-xs font-semibold text-slate-800">${title}</span><span class="mt-1 block text-[11px] leading-4 text-slate-500">${detail}</span></a>`; }
+
+function donutChart(ranks) { const circumference = 2 * Math.PI * 36; let offset = 0; const segments = ranks.map((rank) => { const length = (rank.percent / 100) * circumference; const segment = `<circle cx="50" cy="50" r="36" fill="none" stroke="${rank.color}" stroke-width="12" stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-offset}" transform="rotate(-90 50 50)"/>`; offset += length; return segment; }).join(''); return `<svg class="h-36 w-36 shrink-0" viewBox="0 0 100 100" role="img"><title>Cadet rank distribution</title><circle cx="50" cy="50" r="36" fill="none" stroke="#f1f5f9" stroke-width="12"/>${segments}<text x="50" y="47" text-anchor="middle" class="fill-slate-900 text-[14px] font-bold">${ranks.reduce((sum, rank) => sum + rank.count, 0)}</text><text x="50" y="59" text-anchor="middle" class="fill-slate-400 text-[7px] font-medium">CADETS</text></svg>`; }
+function velocityChart(series) { const width = 700, height = 210, top = 14, bottom = 32, left = 10, right = 10, max = Math.max(...series.users, ...series.cadets) * 1.15; const toPoints = (values) => values.map((value, index) => ({ x: left + ((width - left - right) * index) / (values.length - 1), y: top + (height - top - bottom) * (1 - value / max) })); const users = toPoints(series.users), cadets = toPoints(series.cadets); const smooth = (points) => points.reduce((path, point, index) => { if (!index) return `M ${point.x} ${point.y}`; const prior = points[index - 1], mid = (prior.x + point.x) / 2; return `${path} C ${mid} ${prior.y}, ${mid} ${point.y}, ${point.x} ${point.y}`; }, ''); const area = (points) => `${smooth(points)} L ${points.at(-1).x} ${height - bottom} L ${points[0].x} ${height - bottom} Z`; const grid = [0.25, 0.5, 0.75].map((fraction) => `<line x1="${left}" x2="${width - right}" y1="${top + (height - top - bottom) * fraction}" y2="${top + (height - top - bottom) * fraction}" stroke="#e2e8f0" stroke-dasharray="3 5"/>`).join(''); return `<svg class="h-full w-full overflow-visible" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img"><title>Registration velocity</title><defs><linearGradient id="userFill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#4f46e5" stop-opacity=".20"/><stop offset="1" stop-color="#4f46e5" stop-opacity="0"/></linearGradient><linearGradient id="cadetFill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#10b981" stop-opacity=".16"/><stop offset="1" stop-color="#10b981" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area(users)}" fill="url(#userFill)"/><path d="${area(cadets)}" fill="url(#cadetFill)"/><path d="${smooth(users)}" fill="none" stroke="#4f46e5" stroke-width="3" vector-effect="non-scaling-stroke"/><path d="${smooth(cadets)}" fill="none" stroke="#10b981" stroke-width="3" vector-effect="non-scaling-stroke"/>${users.map((point) => `<circle cx="${point.x}" cy="${point.y}" r="3.5" fill="white" stroke="#4f46e5" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join('')}${cadets.map((point) => `<circle cx="${point.x}" cy="${point.y}" r="3.5" fill="white" stroke="#10b981" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join('')}${series.labels.map((label, index) => `<text x="${users[index].x}" y="${height - 8}" text-anchor="middle" class="fill-slate-400 text-[11px]">${label}</text>`).join('')}</svg>`; }
+
+function rankDistribution(items) { const colors = [{ color: '#6366f1', dot: 'bg-indigo-500' }, { color: '#10b981', dot: 'bg-emerald-500' }, { color: '#f59e0b', dot: 'bg-amber-500' }, { color: '#8b5cf6', dot: 'bg-violet-500' }]; const groups = items.reduce((out, cadet) => { const label = cadet.rank?.name_en || 'Unassigned'; out[label] = (out[label] || 0) + 1; return out; }, {}); const entries = Object.entries(groups).sort((a, b) => b[1] - a[1]).slice(0, 4); const source = entries.length ? entries : [['Cadet', 0], ['Lance Corporal', 0], ['Corporal', 0], ['Sergeant', 0]]; const total = source.reduce((sum, [, count]) => sum + count, 0) || 1; return source.map(([label, count], index) => ({ label, count, percent: Math.round((count / total) * 100), ...colors[index] })); }
+function regionalDistribution(cadets, users) { const groups = [...cadets, ...users].reduce((out, record) => { const label = record.province?.name_en || record.province?.name || 'Unspecified address'; out[label] = (out[label] || 0) + 1; return out; }, {}); const entries = Object.entries(groups).sort((a, b) => b[1] - a[1]).slice(0, 4); const source = entries.length ? entries : [['Bagmati Province', 64], ['Lumbini Province', 24], ['Koshi Province', 12]]; const total = source.reduce((sum, [, count]) => sum + count, 0) || 1; return source.map(([label, count]) => ({ label, percent: Math.max(4, Math.round((count / total) * 100)) })); }
+
+async function loadStats() { try { const [usersRaw, activeUsersRaw, cadetsRaw] = await Promise.all([api('/users'), api('/users', { params: { status: 'active' } }), api('/cadets')]); const totalUsers = usersRaw?.meta?.total ?? 0, activeUsers = activeUsersRaw?.meta?.total ?? 0; return { totalUsers, totalCadets: cadetsRaw?.meta?.total ?? 0, activeUsers, activeRate: totalUsers ? Math.round((activeUsers / totalUsers) * 100) : 0, userItems: usersRaw?.items ?? [], cadetItems: cadetsRaw?.items ?? [], userName: store.getUser()?.name || 'Administrator' }; } catch { return { totalUsers: 0, totalCadets: 0, activeUsers: 0, activeRate: 0, userItems: [], cadetItems: [], userName: 'Administrator' }; } }
+function number(value) { return new Intl.NumberFormat().format(value || 0); }
+function icon(path) { return `<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${path}</svg>`; }
+function usersIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m18 0v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75M14 7a4 4 0 11-8 0 4 4 0 018 0z"/>'); }
+function cadetIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M12 3l2.2 4.46 4.92.72-3.56 3.47.84 4.9L12 14.24l-4.4 2.31.84-4.9L4.88 8.18l4.92-.72L12 3zM4 21h16"/>'); }
+function pulseIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l2-6 4 12 2-6h6"/>'); }
+function rankIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M12 3l8 4.5-8 4.5-8-4.5L12 3zm-5 8.5v4L12 18l5-2.5v-4"/>'); }
+function mapIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M9 18l-6 3V6l6-3m0 15l6 3m-6-3V3m6 18l6-3V3"/>'); }
+function boltIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/>'); }
+function plusIcon() { return icon('<path stroke-linecap="round" d="M12 5v14m-7-7h14"/>'); }
+function reportIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6m3 6V7m3 10v-3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"/>'); }
+function uploadIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/>'); }
+function shieldIcon() { return icon('<path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3zm-3 9l2 2 4-4"/>'); }

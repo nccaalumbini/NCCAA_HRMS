@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\AccessScopeType;
 use App\Models\Cadet;
 use App\Models\User;
+use App\Support\GeographicHierarchyValidator;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
@@ -82,6 +83,20 @@ class CadetService
     {
         $this->assertWithinScope($actor, $data);
 
+        $scope = $this->accessScope->resolve($actor);
+        if ($scope === AccessScopeType::Province && empty($data['province_id'])) {
+            $data['province_id'] = $actor->province_id;
+        } elseif ($scope === AccessScopeType::District) {
+            if (empty($data['province_id']) && $actor->province_id) {
+                $data['province_id'] = $actor->province_id;
+            }
+            if (empty($data['district_id']) && $actor->district_id) {
+                $data['district_id'] = $actor->district_id;
+            }
+        }
+
+        GeographicHierarchyValidator::validate($data);
+
         $data['status'] ??= 'active';
 
         $cadet = Cadet::create($this->cadetFields($data));
@@ -104,6 +119,14 @@ class CadetService
     {
         $this->assertCanManage($actor, $cadet);
         $this->assertWithinScope($actor, $data);
+
+        $mergedGeo = [
+            'province_id' => array_key_exists('province_id', $data) ? $data['province_id'] : $cadet->province_id,
+            'district_id' => array_key_exists('district_id', $data) ? $data['district_id'] : $cadet->district_id,
+            'local_level_id' => array_key_exists('local_level_id', $data) ? $data['local_level_id'] : $cadet->local_level_id,
+            'ward_id' => array_key_exists('ward_id', $data) ? $data['ward_id'] : $cadet->ward_id,
+        ];
+        GeographicHierarchyValidator::validate($mergedGeo);
 
         $cadet->update($this->cadetFields($data));
 
@@ -212,17 +235,35 @@ class CadetService
             return;
         }
 
-        if (! empty($data['province_id']) && $scope === AccessScopeType::Province
-            && ! in_array($data['province_id'], $geography['province_ids'], true)) {
-            throw ValidationException::withMessages([
-                'province_id' => ['Province is outside your scope.'],
-            ]);
+        if ($scope === AccessScopeType::Province) {
+            if (array_key_exists('province_id', $data) && $data['province_id'] !== null
+                && ! in_array((int) $data['province_id'], $geography['province_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'province_id' => ['Province is outside your scope.'],
+                ]);
+            }
+
+            if (! empty($data['district_id']) && ! in_array((int) $data['district_id'], $geography['district_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'district_id' => ['District is outside your scope.'],
+                ]);
+            }
         }
 
-        if (! empty($data['district_id']) && ! in_array($data['district_id'], $geography['district_ids'], true)) {
-            throw ValidationException::withMessages([
-                'district_id' => ['District is outside your scope.'],
-            ]);
+        if ($scope === AccessScopeType::District) {
+            if (array_key_exists('province_id', $data) && $data['province_id'] !== null
+                && $actor->province_id !== null && (int) $data['province_id'] !== (int) $actor->province_id) {
+                throw ValidationException::withMessages([
+                    'province_id' => ['Province is outside your scope.'],
+                ]);
+            }
+
+            if (array_key_exists('district_id', $data) && $data['district_id'] !== null
+                && ! in_array((int) $data['district_id'], $geography['district_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'district_id' => ['District is outside your scope.'],
+                ]);
+            }
         }
     }
 }

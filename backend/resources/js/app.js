@@ -5,21 +5,28 @@ import * as dashboard from './pages/dashboard';
 import * as users from './pages/users';
 import * as roles from './pages/roles';
 import * as cadets from './pages/cadets';
+import * as profile from './pages/profile';
+import * as recruitment from './pages/recruitment';
+import * as email from './pages/email';
 
 const routes = {
     '#/dashboard': dashboard.render,
     '#/users': users.render,
+    '#/profile': profile.render,
     '#/roles': roles.render,
     '#/cadets': cadets.render,
+    '#/recruitment': recruitment.render,
+    '#/email': email.render,
     '#/login': renderLogin,
 };
 
 function currentHash() {
     const hash = window.location.hash || '';
-    if (!hash || hash === '#') {
+    const normalized = hash.split('?')[0] || '#';
+    if (!normalized || normalized === '#') {
         return '#/dashboard';
     }
-    return routes[hash] ? hash : '#/dashboard';
+    return routes[normalized] ? normalized : '#/dashboard';
 }
 
 async function route() {

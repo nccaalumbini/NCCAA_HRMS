@@ -9,7 +9,11 @@ let state = { search: '', status: '', rank_id: '', page: 1 };
 export async function render() {
     setActive('cadets');
     content(spinner());
-    const can = { create: store.hasPermission('cadets.create'), update: store.hasPermission('cadets.update') };
+    const can = {
+        create: store.hasPermission('cadets.create'),
+        update: store.hasPermission('cadets.update'),
+        import: store.hasPermission('cadets.import'),
+    };
     const data = await api('/cadets', {
         params: { search: state.search, status: state.status, rank_id: state.rank_id, page: state.page, per_page: 10 },
     });
@@ -30,6 +34,7 @@ export async function render() {
             ${ranks.map((r) => `<option value="${r.id}" ${String(state.rank_id) === String(r.id) ? 'selected' : ''}>${esc(r.name_en)}</option>`).join('')}
           </select>
           ${can.create ? '<button id="new-cadet" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">New Cadet</button>' : ''}
+          ${can.import ? '<button id="import-cadets-btn" class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Import Excel</button>' : ''}
         </div>
       </div>
       <div id="cadet-table"></div>
@@ -53,6 +58,7 @@ export async function render() {
         render();
     });
     root.querySelector('#new-cadet')?.addEventListener('click', () => renderForm(can));
+    root.querySelector('#import-cadets-btn')?.addEventListener('click', () => renderImportModal());
 
     const table = root.querySelector('#cadet-table');
     if (!data.items.length) {
@@ -275,4 +281,250 @@ function renderForm(can, uuid = null) {
             }
         });
     });
+}
+
+function renderImportModal() {
+    const modalHtml = `
+      <div id="cadet-import-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-4xl rounded-xl bg-white p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
+          <div class="flex items-start justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-lg font-bold text-slate-900">Cadet Excel / Spreadsheet Import</h3>
+              <p class="text-xs text-slate-500">Upload .xlsx, .xls, or .csv files, review column mappings, preview validation, and import safely.</p>
+            </div>
+            <button id="btn-close-import-modal" class="text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+
+          <div id="import-step-container" class="flex-1 overflow-y-auto space-y-4">
+            <!-- Step 1: Upload -->
+            <div id="import-upload-step" class="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-indigo-400 transition cursor-pointer">
+              <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" class="hidden">
+              <div class="text-indigo-600 mb-2">
+                <svg class="mx-auto h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+              </div>
+              <p class="text-sm font-semibold text-slate-700">Click to upload or drag and drop spreadsheet</p>
+              <p class="text-xs text-slate-400 mt-1">Supports XLSX, XLS, and CSV (max 10MB, up to 2,500 rows)</p>
+            </div>
+
+            <!-- Step 2: Mapping & Preview container (injected dynamically) -->
+            <div id="import-dynamic-content" class="hidden space-y-4"></div>
+          </div>
+
+          <div id="import-modal-actions" class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button id="btn-cancel-import" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = document.getElementById('cadet-import-modal');
+    const uploadStep = modal.querySelector('#import-upload-step');
+    const fileInput = modal.querySelector('#import-file-input');
+    const dynamicContent = modal.querySelector('#import-dynamic-content');
+    const actions = modal.querySelector('#import-modal-actions');
+
+    const closeModal = () => modal.remove();
+    modal.querySelector('#btn-close-import-modal').onclick = closeModal;
+    modal.querySelector('#btn-cancel-import').onclick = closeModal;
+
+    uploadStep.onclick = () => fileInput.click();
+    uploadStep.ondragover = (e) => {
+        e.preventDefault();
+        uploadStep.classList.add('border-indigo-500', 'bg-indigo-50/20');
+    };
+    uploadStep.ondragleave = () => {
+        uploadStep.classList.remove('border-indigo-500', 'bg-indigo-50/20');
+    };
+    uploadStep.ondrop = (e) => {
+        e.preventDefault();
+        uploadStep.classList.remove('border-indigo-500', 'bg-indigo-50/20');
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelect(fileInput.files[0]);
+        }
+    };
+
+    fileInput.onchange = () => {
+        if (fileInput.files.length) {
+            handleFileSelect(fileInput.files[0]);
+        }
+    };
+
+    let currentFile = null;
+    let inspectedData = null;
+
+    async function handleFileSelect(file) {
+        currentFile = file;
+        uploadStep.classList.add('hidden');
+        dynamicContent.classList.remove('hidden');
+        dynamicContent.innerHTML = spinner();
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            inspectedData = await api('/cadets/import/inspect', { method: 'POST', body: formData });
+            renderMappingStep(inspectedData);
+        } catch (err) {
+            dynamicContent.innerHTML = `<div class="p-4 bg-rose-50 text-rose-700 text-xs rounded-lg">${esc(err.message)}</div>`;
+            actions.innerHTML = `<button id="btn-reupload" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Upload another file</button>`;
+            modal.querySelector('#btn-reupload').onclick = () => {
+                uploadStep.classList.remove('hidden');
+                dynamicContent.classList.add('hidden');
+                actions.innerHTML = `<button id="btn-cancel-import" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>`;
+                modal.querySelector('#btn-cancel-import').onclick = closeModal;
+            };
+        }
+    }
+
+    function renderMappingStep(data) {
+        const fields = [
+            { key: 'cadet_number', label: 'Cadet Number *', required: true },
+            { key: 'name', label: 'Full Name *', required: true },
+            { key: 'email', label: 'Email Address' },
+            { key: 'phone', label: 'Phone Number' },
+            { key: 'rank', label: 'Rank' },
+            { key: 'province', label: 'Province' },
+            { key: 'district', label: 'District' },
+            { key: 'local_level', label: 'Local Level' },
+            { key: 'ward_number', label: 'Ward Number' },
+            { key: 'gender', label: 'Gender' },
+            { key: 'blood_group', label: 'Blood Group' },
+        ];
+
+        dynamicContent.innerHTML = `
+          <div class="space-y-4">
+            <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 border border-slate-200">
+              File: <strong class="text-slate-800">${esc(currentFile.name)}</strong> (${data.headers.length} columns detected)
+            </div>
+
+            <div>
+              <h4 class="text-sm font-semibold text-slate-800 mb-2">Column Mapping</h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                ${fields.map((f) => `
+                  <div class="border border-slate-200 rounded-lg p-2.5 bg-white">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">${f.label}</label>
+                    <select id="map-${f.key}" class="w-full text-xs rounded border border-slate-200 p-1.5 focus:border-indigo-500 focus:outline-none">
+                      <option value="">— Skip / None —</option>
+                      ${data.headers.map((h) => `<option value="${esc(h)}" ${data.detected_mapping[f.key] === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}
+                    </select>
+                  </div>`).join('')}
+              </div>
+            </div>
+          </div>`;
+
+        actions.innerHTML = `
+          <button id="btn-back-upload" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Back</button>
+          <button id="btn-preview-import" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Preview &amp; Validate</button>`;
+
+        modal.querySelector('#btn-back-upload').onclick = () => {
+            uploadStep.classList.remove('hidden');
+            dynamicContent.classList.add('hidden');
+            actions.innerHTML = `<button id="btn-cancel-import" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>`;
+            modal.querySelector('#btn-cancel-import').onclick = closeModal;
+        };
+
+        modal.querySelector('#btn-preview-import').onclick = () => runPreview(fields);
+    }
+
+    async function runPreview(fields) {
+        const mapping = {};
+        fields.forEach((f) => {
+            const val = dynamicContent.querySelector(`#map-${f.key}`)?.value;
+            if (val) mapping[f.key] = val;
+        });
+
+        dynamicContent.innerHTML = spinner();
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        formData.append('mapping', JSON.stringify(mapping));
+
+        try {
+            const previewData = await api('/cadets/import/preview', { method: 'POST', body: formData });
+            renderPreviewTable(previewData, fields);
+        } catch (err) {
+            toast(err.message, 'error');
+            renderMappingStep(inspectedData);
+        }
+    }
+
+    function renderPreviewTable(previewData, fields) {
+        const s = previewData.summary;
+        const validRows = previewData.rows.filter((r) => r.is_valid);
+
+        dynamicContent.innerHTML = `
+          <div class="space-y-4">
+            <!-- Summary Stats -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+              <div class="rounded-lg bg-slate-50 p-2 border border-slate-200">
+                <div class="font-bold text-slate-800 text-sm">${s.total_rows}</div>
+                <div class="text-slate-500">Total Rows</div>
+              </div>
+              <div class="rounded-lg bg-emerald-50 p-2 border border-emerald-200 text-emerald-800">
+                <div class="font-bold text-sm">${s.valid_rows}</div>
+                <div>Valid Records</div>
+              </div>
+              <div class="rounded-lg bg-rose-50 p-2 border border-rose-200 text-rose-800">
+                <div class="font-bold text-sm">${s.invalid_rows}</div>
+                <div>Invalid / Errors</div>
+              </div>
+              <div class="rounded-lg bg-amber-50 p-2 border border-amber-200 text-amber-800">
+                <div class="font-bold text-sm">${s.duplicates}</div>
+                <div>Duplicates</div>
+              </div>
+            </div>
+
+            <div class="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
+              <table class="min-w-full text-xs">
+                <thead class="bg-slate-50 sticky top-0 text-left text-slate-500">
+                  <tr>
+                    <th class="px-3 py-2">Row</th>
+                    <th class="px-3 py-2">Cadet No</th>
+                    <th class="px-3 py-2">Name</th>
+                    <th class="px-3 py-2">Email</th>
+                    <th class="px-3 py-2">Rank</th>
+                    <th class="px-3 py-2">Location</th>
+                    <th class="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${previewData.rows.map((r) => `
+                    <tr class="${r.is_valid ? 'hover:bg-slate-50' : 'bg-rose-50/40'}">
+                      <td class="px-3 py-2 text-slate-400">${r.row_index}</td>
+                      <td class="px-3 py-2 font-mono font-semibold ${r.cadet_number ? 'text-slate-800' : 'text-rose-500'}">${esc(r.cadet_number || 'Missing')}</td>
+                      <td class="px-3 py-2 font-medium text-slate-800">${esc(r.name)}</td>
+                      <td class="px-3 py-2 text-slate-500">${esc(r.email || '—')}</td>
+                      <td class="px-3 py-2">${esc(r.rank_name || '—')}</td>
+                      <td class="px-3 py-2 text-slate-500">${esc([r.province_name, r.district_name].filter(Boolean).join(' · ') || '—')}</td>
+                      <td class="px-3 py-2">
+                        ${r.is_valid ? '<span class="text-emerald-600 font-semibold">✓ Valid</span>' : `<span class="text-rose-600 font-semibold" title="${esc(r.errors.join(', '))}">✕ ${esc(r.errors[0])}</span>`}
+                        ${r.warnings?.length ? `<div class="text-[10px] text-amber-600">${esc(r.warnings[0])}</div>` : ''}
+                      </td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>`;
+
+        actions.innerHTML = `
+          <button id="btn-back-mapping" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Back to Mapping</button>
+          ${validRows.length ? `<button id="btn-commit-import" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Import ${validRows.length} Valid Records</button>` : `<button disabled class="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-400 cursor-not-allowed">No Valid Records</button>`}`;
+
+        modal.querySelector('#btn-back-mapping').onclick = () => renderMappingStep(inspectedData);
+        modal.querySelector('#btn-commit-import')?.addEventListener('click', async () => {
+            actions.innerHTML = spinner();
+            try {
+                const result = await api('/cadets/import/commit', {
+                    method: 'POST',
+                    body: { rows: validRows },
+                });
+                closeModal();
+                toast(`Import complete: ${result.imported} imported, ${result.skipped} skipped.`, 'success');
+                render();
+            } catch (err) {
+                toast(err.message || 'Import failed.', 'error');
+                renderPreviewTable(previewData, fields);
+            }
+        });
+    }
 }
