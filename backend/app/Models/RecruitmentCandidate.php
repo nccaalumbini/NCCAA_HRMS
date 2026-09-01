@@ -6,11 +6,13 @@ use Database\Factories\RecruitmentCandidateFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RecruitmentCandidate extends Model
 {
     /** @use HasFactory<RecruitmentCandidateFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     public const STATUS_IMPORTED = 'imported';
 
@@ -30,7 +32,8 @@ class RecruitmentCandidate extends Model
     protected $fillable = [
         'full_name', 'gender', 'province_id', 'district_id', 'local_level', 'ward_number',
         'contact_number', 'email', 'skills', 'recruitment_status', 'notes', 'outreach_sent_at',
-        'converted_user_id', 'converted_at',
+        'converted_user_id', 'converted_at', 'source', 'priority_score', 'tags', 'assigned_recruiter_id',
+        'recruitment_import_batch_id', 'last_contacted_at',
     ];
 
     /**
@@ -63,6 +66,21 @@ class RecruitmentCandidate extends Model
         return $this->belongsTo(User::class, 'converted_user_id');
     }
 
+    public function assignedRecruiter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_recruiter_id');
+    }
+
+    public function importBatch(): BelongsTo
+    {
+        return $this->belongsTo(RecruitmentImportBatch::class, 'recruitment_import_batch_id');
+    }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(RecruitmentActivity::class, 'recruitment_candidate_id');
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -72,8 +90,11 @@ class RecruitmentCandidate extends Model
     {
         return [
             'skills' => 'array',
+            'tags' => 'array',
             'ward_number' => 'integer',
+            'priority_score' => 'integer',
             'outreach_sent_at' => 'datetime',
+            'last_contacted_at' => 'datetime',
             'converted_at' => 'datetime',
         ];
     }

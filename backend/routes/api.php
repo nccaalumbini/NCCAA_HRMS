@@ -56,9 +56,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cadets/{cadet}', [CadetController::class, 'destroy'])->middleware('permission:cadets.delete');
 
     Route::get('/recruitment-candidates', [RecruitmentCandidateController::class, 'index'])->middleware('permission:recruitment.view');
+    Route::post('/recruitment-candidates', [RecruitmentCandidateController::class, 'store'])->middleware('permission:recruitment.create');
     Route::post('/recruitment-candidates/import', [RecruitmentCandidateController::class, 'import'])->middleware('permission:recruitment.import');
-    Route::patch('/recruitment-candidates/{candidate}', [RecruitmentCandidateController::class, 'update'])->middleware('permission:recruitment.action');
+    Route::get('/recruitment-candidates/check-contact', [RecruitmentCandidateController::class, 'checkContact'])->middleware('permission:recruitment.view,recruitment.create');
+    Route::get('/recruitment-candidates/{candidate}', [RecruitmentCandidateController::class, 'show'])->middleware('permission:recruitment.view');
+    Route::patch('/recruitment-candidates/{candidate}', [RecruitmentCandidateController::class, 'update'])->middleware('permission:recruitment.update,recruitment.action');
+    Route::delete('/recruitment-candidates/{candidate}', [RecruitmentCandidateController::class, 'destroy'])->middleware('permission:recruitment.delete');
     Route::post('/recruitment-candidates/{candidate}/promote', [RecruitmentCandidateController::class, 'promote'])->middleware('permission:recruitment.promote-to-cadet');
+    Route::post('/recruitment-candidates/{candidate}/communication', [RecruitmentCandidateController::class, 'sendCommunication'])->middleware('permission:recruitment.communication.send');
+    Route::get('/recruitment-candidates/{candidate}/communications', [RecruitmentCandidateController::class, 'communicationHistory'])->middleware('permission:recruitment.communication.view');
 
     Route::get('/email/settings', [EmailController::class, 'getSettings'])->middleware('permission:email.settings.view');
     Route::put('/email/settings', [EmailController::class, 'saveSettings'])->middleware('permission:email.settings.manage');

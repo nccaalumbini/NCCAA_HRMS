@@ -43,10 +43,15 @@ class PermissionSeeder extends Seeder
                 'recruitments.publish',
             ],
             'recruitment' => [
-                'recruitment.import',
+                'recruitment.create',
                 'recruitment.view',
+                'recruitment.update',
+                'recruitment.delete',
+                'recruitment.import',
                 'recruitment.action',
                 'recruitment.promote-to-cadet',
+                'recruitment.communication.send',
+                'recruitment.communication.view',
             ],
             'applications' => [
                 'applications.view',

@@ -32,16 +32,16 @@ export async function render() {
 
     const root = content('');
     root.innerHTML = `
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex flex-wrap gap-3 items-center">
+      <div class="mb-4 flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <input id="user-search" type="text" value="${esc(state.search)}" placeholder="Search name, email, username, phone…"
-            class="w-64 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <select id="user-status" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            class="w-full sm:w-64 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <select id="user-status" class="rounded-md border border-slate-300 px-3 py-2 text-sm sm:flex-1 sm:max-w-48">
             <option value="">All statuses</option>
             <option value="active" ${state.status === 'active' ? 'selected' : ''}>Active</option>
             <option value="disabled" ${state.status === 'disabled' ? 'selected' : ''}>Disabled</option>
           </select>
-          ${can.create ? '<button id="new-user" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">New User</button>' : ''}
+          ${can.create ? `<button id="new-user" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">New User</button>` : ''}
         </div>
       </div>
       <div id="user-table"></div>
@@ -66,8 +66,8 @@ export async function render() {
         table.innerHTML = '<div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">No users found.</div>';
     } else {
         table.innerHTML = `
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <table class="w-full text-sm">
+        <div class="bg-white rounded-xl border border-slate-200 table-scroll">
+          <table class="ui-sticky-col w-full min-w-[560px] text-sm">
             <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr><th class="px-4 py-3 font-medium">Name</th><th class="px-4 py-3 font-medium">Email</th><th class="px-4 py-3 font-medium">Roles</th><th class="px-4 py-3 font-medium">Status</th><th class="px-4 py-3 font-medium text-right">Actions</th></tr>
             </thead>
@@ -309,7 +309,7 @@ function renderForm(can, uuid = null) {
 
           </form>
 
-          <div id="form-actions" class="sticky bottom-0 z-10 mt-6 flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white/95 backdrop-blur px-6 py-4 shadow-lg shadow-slate-900/5">
+          <div id="form-actions" class="sticky bottom-0 z-10 mt-6 flex flex-wrap items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white/95 backdrop-blur px-4 py-4 shadow-lg shadow-slate-900/5 sm:px-6">
             <button type="button" id="cancel" class="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Cancel Action</button>
             <button type="submit" form="user-form" class="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors">${editing ? 'Save Changes' : 'Save and Create User Account'}</button>
           </div>

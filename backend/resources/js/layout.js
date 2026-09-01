@@ -15,7 +15,8 @@ export function shell(user) {
     const app = document.getElementById('app');
     app.innerHTML = `
     <div class="min-h-screen flex">
-      <aside id="sidebar" class="w-64 bg-slate-900 text-slate-200 flex flex-col fixed inset-y-0 left-0">
+      <div id="sidebar-backdrop" class="fixed inset-0 z-20 hidden bg-slate-900/50 lg:hidden"></div>
+      <aside id="sidebar" class="w-64 bg-slate-900 text-slate-200 flex flex-col fixed inset-y-0 left-0 z-30 shadow-xl lg:shadow-none">
         <div class="px-5 py-5 border-b border-slate-800">
           <div class="font-bold text-white tracking-tight">NCCAA HRMS</div>
           <div class="text-xs text-slate-400 mt-0.5">Admin Console</div>
@@ -23,22 +24,51 @@ export function shell(user) {
         <nav class="flex-1 px-3 py-4 space-y-1" id="nav"></nav>
         <div class="px-5 py-4 border-t border-slate-800 text-xs text-slate-400">${esc(user.name)}</div>
       </aside>
-      <div class="flex-1 ml-64">
-        <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
-          <h1 id="page-title" class="text-lg font-semibold text-slate-800"></h1>
-          <div class="flex items-center gap-3">
-            <div class="text-right">
+      <div class="flex min-w-0 flex-1 flex-col lg:ml-64">
+        <header class="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sticky top-0 z-10 sm:px-6">
+          <div class="flex min-w-0 items-center gap-3">
+            <button id="sidebar-toggle" type="button" aria-label="Open navigation" aria-expanded="false" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 lg:hidden">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <h1 id="page-title" class="truncate text-lg font-semibold text-slate-800"></h1>
+          </div>
+          <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div class="hidden text-right sm:block">
               <div class="text-sm font-medium text-slate-700">${esc(user.name)}</div>
-              <div class="text-xs text-slate-400">${esc((user.roles || []).join(', '))}</div>
+              <div class="max-w-[16rem] truncate text-xs text-slate-400">${esc((user.roles || []).join(', '))}</div>
             </div>
             <span id="user-role-badge" class="hidden px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs font-medium"></span>
-            <button id="logout" class="text-sm px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50">Log out</button>
+            <button id="logout" class="text-sm px-3 py-2 rounded border border-slate-300 text-slate-600 hover:bg-slate-50">Log out</button>
           </div>
         </header>
-        <main id="page-content" class="p-6"></main>
+        <main id="page-content" class="min-w-0 flex-1 p-4 sm:p-6"></main>
       </div>
       <div id="toasts" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
     </div>`;
+
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const toggle = document.getElementById('sidebar-toggle');
+
+    function closeSidebar() {
+        sidebar.classList.remove('sidebar-open');
+        backdrop.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+    function openSidebar() {
+        sidebar.classList.add('sidebar-open');
+        backdrop.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+    }
+
+    toggle?.addEventListener('click', () => {
+        if (sidebar.classList.contains('sidebar-open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+    backdrop?.addEventListener('click', closeSidebar);
 
     const badge = document.getElementById('user-role-badge');
     if (user.roles?.length) {
@@ -80,6 +110,7 @@ export function shell(user) {
         a.addEventListener('click', () => {
             nav.querySelectorAll('a').forEach((x) => x.classList.remove('bg-slate-800', 'text-white'));
             a.classList.add('bg-slate-800', 'text-white');
+            closeSidebar();
         });
     });
 

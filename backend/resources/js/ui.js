@@ -70,18 +70,18 @@ export function pagination(meta, onPage) {
         }
     }
     return `
-    <div class="mt-4 flex items-center justify-between text-sm">
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
       <span class="text-slate-500">Page ${current} of ${last} · ${meta.total} total</span>
-      <div class="flex gap-1">
-        <button data-page="${current - 1}" class="px-3 py-1 rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" ${current <= 1 ? 'disabled' : ''}>Prev</button>
+      <div class="flex flex-wrap gap-1">
+        <button data-page="${current - 1}" class="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" ${current <= 1 ? 'disabled' : ''}>Prev</button>
         ${pages
             .map((p) =>
                 p === '…'
                     ? `<span class="px-2 py-1 text-slate-400">…</span>`
-                    : `<button data-page="${p}" class="px-3 py-1 rounded border ${p === current ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}">${p}</button>`,
+                    : `<button data-page="${p}" class="px-3 py-1.5 rounded border ${p === current ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}">${p}</button>`,
             )
             .join('')}
-        <button data-page="${current + 1}" class="px-3 py-1 rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" ${current >= last ? 'disabled' : ''}>Next</button>
+        <button data-page="${current + 1}" class="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" ${current >= last ? 'disabled' : ''}>Next</button>
       </div>
     </div>`;
 }

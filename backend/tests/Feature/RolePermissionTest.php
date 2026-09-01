@@ -39,19 +39,24 @@ class RolePermissionTest extends TestCase
 
         $superAdmin = Role::where('slug', Role::SUPER_ADMIN)->first();
 
-        $this->assertCount(49, $superAdmin->permissions);
+        $this->assertCount(54, $superAdmin->permissions);
     }
 
     public function test_permission_seeder_creates_granular_permissions(): void
     {
         $this->seed(PermissionSeeder::class);
 
-        $this->assertDatabaseCount('permissions', 49);
+        $this->assertDatabaseCount('permissions', 54);
         $this->assertDatabaseHas('permissions', ['slug' => 'cadets.import']);
         $this->assertDatabaseHas('permissions', ['slug' => 'applications.shortlist']);
         $this->assertDatabaseHas('permissions', ['slug' => 'users.assign-role']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.create']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.update']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.delete']);
         $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.import']);
         $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.promote-to-cadet']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.communication.send']);
+        $this->assertDatabaseHas('permissions', ['slug' => 'recruitment.communication.view']);
         $this->assertDatabaseHas('permissions', ['slug' => 'email.campaigns.create']);
         $this->assertDatabaseHas('permissions', ['slug' => 'email.settings.manage']);
     }

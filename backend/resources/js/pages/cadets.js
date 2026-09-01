@@ -21,15 +21,15 @@ export async function render() {
 
     const root = content('');
     root.innerHTML = `
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex flex-wrap gap-3 items-center">
+      <div class="mb-4 flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <input id="cadet-search" type="text" value="${esc(state.search)}" placeholder="Search name, cadet number, email…"
-            class="w-64 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            class="w-full sm:w-64 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <select id="cadet-status" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
             <option value="">All statuses</option>
             ${['active', 'inactive', 'suspended', 'graduated'].map((s) => `<option value="${s}" ${state.status === s ? 'selected' : ''}>${s}</option>`).join('')}
           </select>
-          <select id="cadet-rank" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+          <select id="cadet-rank" class="max-w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
             <option value="">All ranks</option>
             ${ranks.map((r) => `<option value="${r.id}" ${String(state.rank_id) === String(r.id) ? 'selected' : ''}>${esc(r.name_en)}</option>`).join('')}
           </select>
@@ -65,8 +65,8 @@ export async function render() {
         table.innerHTML = '<div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">No cadets found.</div>';
     } else {
         table.innerHTML = `
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <table class="w-full text-sm">
+        <div class="bg-white rounded-xl border border-slate-200 table-scroll">
+          <table class="ui-sticky-col w-full min-w-[540px] text-sm">
             <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr><th class="px-4 py-3 font-medium">Name</th><th class="px-4 py-3 font-medium">Cadet No.</th><th class="px-4 py-3 font-medium">Rank</th><th class="px-4 py-3 font-medium">District</th><th class="px-4 py-3 font-medium">Status</th><th class="px-4 py-3 font-medium text-right">Actions</th></tr>
             </thead>
