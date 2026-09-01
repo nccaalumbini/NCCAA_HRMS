@@ -19,6 +19,12 @@ use Illuminate\Validation\ValidationException;
 
 class RecruitmentCandidateService
 {
+    /** @var array<int, string> */
+    private const EDITABLE_FIELDS = [
+        'full_name', 'gender', 'province_id', 'district_id', 'local_level', 'ward_number',
+        'contact_number', 'email', 'skills', 'recruitment_status', 'notes', 'priority_score',
+    ];
+
     public function __construct(
         private readonly AccessScope $accessScope,
         private readonly AuditLogger $auditLogger,
@@ -117,21 +123,105 @@ class RecruitmentCandidateService
         return $results;
     }
 
-    /** @param array{recruitment_status?: string, notes?: string|null} $data */
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function store(User $actor, array $data): RecruitmentCandidate
+    {
+        $this->assertWithinScope($actor, $data);
+
+        GeographicHierarchyValidator::validate($data);
+
+        $contactNumber = $this->normalizePhone($data['contact_number']);
+        if ($contactNumber === '') {
+            throw ValidationException::withMessages(['contact_number' => ['The contact number is required.']]);
+        }
+        $this->assertPhoneAvailable($contactNumber);
+
+        if (! empty($data['email']) && RecruitmentCandidate::where('email', $data['email'])->exists()) {
+            throw ValidationException::withMessages(['email' => ['The email has already been taken.']]);
+        }
+
+        $candidate = RecruitmentCandidate::create([
+            'full_name' => $data['full_name'],
+            'gender' => $data['gender'] ?? null,
+            'province_id' => $data['province_id'] ?? null,
+            'district_id' => $data['district_id'] ?? null,
+            'local_level' => $data['local_level'] ?? null,
+            'ward_number' => isset($data['ward_number']) && $data['ward_number'] !== '' && $data['ward_number'] !== null ? (int) $data['ward_number'] : null,
+            'contact_number' => $contactNumber,
+            'email' => $data['email'] ?? null,
+            'skills' => $data['skills'] ?? [],
+            'recruitment_status' => $data['recruitment_status'] ?? RecruitmentCandidate::STATUS_IMPORTED,
+            'notes' => $data['notes'] ?? null,
+            'priority_score' => $data['priority_score'] ?? null,
+            'source' => 'manual',
+        ]);
+
+        $this->auditLogger->record($actor, 'created_candidate', $candidate, null, null, $candidate->toArray());
+
+        return $candidate->fresh(['province', 'district']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
     public function update(User $actor, RecruitmentCandidate $candidate, array $data): RecruitmentCandidate
     {
         $this->assertCanManage($actor, $candidate);
+        $this->assertWithinScope($actor, $data);
 
-        $old = $candidate->only(['recruitment_status', 'notes']);
+        GeographicHierarchyValidator::validate([
+            'province_id' => $data['province_id'] ?? $candidate->province_id,
+            'district_id' => $data['district_id'] ?? $candidate->district_id,
+        ]);
+
+        if (array_key_exists('contact_number', $data)) {
+            $phone = $this->normalizePhone((string) $data['contact_number']);
+            if ($phone === '') {
+                throw ValidationException::withMessages(['contact_number' => ['The contact number cannot be empty.']]);
+            }
+            $this->assertPhoneAvailable($phone, $candidate);
+            $data['contact_number'] = $phone;
+        }
+
+        if (array_key_exists('email', $data) && ! empty($data['email'])
+            && RecruitmentCandidate::where('email', $data['email'])->where('id', '!=', $candidate->id)->exists()) {
+            throw ValidationException::withMessages(['email' => ['The email has already been taken.']]);
+        }
+
+        $old = $candidate->only(self::EDITABLE_FIELDS);
+
+        $candidate->fill(array_intersect_key($data, array_flip(self::EDITABLE_FIELDS)));
 
         if (($data['recruitment_status'] ?? null) === RecruitmentCandidate::STATUS_OUTREACH_SENT) {
-            $data['outreach_sent_at'] = now();
+            $candidate->outreach_sent_at = now();
         }
-        $candidate->update($data);
 
-        $this->auditLogger->record($actor, 'updated_candidate', $candidate, oldValues: $old, newValues: $candidate->only(array_keys($old)));
+        $candidate->save();
+
+        $this->auditLogger->record($actor, 'updated_candidate', $candidate, oldValues: $old, newValues: $candidate->only(self::EDITABLE_FIELDS));
 
         return $candidate->fresh(['province', 'district']);
+    }
+
+    public function show(User $actor, RecruitmentCandidate $candidate): RecruitmentCandidate
+    {
+        $this->assertCanManage($actor, $candidate);
+
+        return $candidate->loadMissing(['province', 'district', 'convertedUser']);
+    }
+
+    public function delete(User $actor, RecruitmentCandidate $candidate): RecruitmentCandidate
+    {
+        $this->assertCanManage($actor, $candidate);
+
+        $old = $candidate->only(['full_name', 'contact_number', 'email', 'recruitment_status']);
+        $candidate->delete();
+
+        $this->auditLogger->record($actor, 'deleted_candidate', $candidate, oldValues: $old, newValues: ['deleted' => true]);
+
+        return $candidate;
     }
 
     /** @param array{cadet_number: string, rank_id: int, username: string, password: string} $data */
@@ -231,6 +321,83 @@ class RecruitmentCandidateService
         throw ValidationException::withMessages([
             'candidate' => ['You do not have permission to manage this candidate.'],
         ]);
+    }
+
+    /**
+     * Throw if the actor is creating or re-scoping a candidate outside their geography.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function assertWithinScope(User $actor, array $data): void
+    {
+        $scope = $this->accessScope->resolve($actor);
+
+        if ($scope !== AccessScopeType::Province && $scope !== AccessScopeType::District) {
+            return;
+        }
+
+        $geography = $this->accessScope->scopedGeography($actor);
+
+        if ($geography === null) {
+            return;
+        }
+
+        if ($scope === AccessScopeType::Province) {
+            if (array_key_exists('province_id', $data) && $data['province_id'] !== null
+                && ! in_array((int) $data['province_id'], $geography['province_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'province_id' => ['Province is outside your scope.'],
+                ]);
+            }
+
+            if (! empty($data['district_id']) && ! in_array((int) $data['district_id'], $geography['district_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'district_id' => ['District is outside your scope.'],
+                ]);
+            }
+        }
+
+        if ($scope === AccessScopeType::District) {
+            if (array_key_exists('province_id', $data) && $data['province_id'] !== null
+                && $actor->province_id !== null && (int) $data['province_id'] !== (int) $actor->province_id) {
+                throw ValidationException::withMessages([
+                    'province_id' => ['Province is outside your scope.'],
+                ]);
+            }
+
+            if (array_key_exists('district_id', $data) && $data['district_id'] !== null
+                && ! in_array((int) $data['district_id'], $geography['district_ids'], true)) {
+                throw ValidationException::withMessages([
+                    'district_id' => ['District is outside your scope.'],
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Check whether a contact number is already used by a candidate or linked user.
+     */
+    public function contactNumberTaken(string $contactNumber): bool
+    {
+        $phone = $this->normalizePhone($contactNumber);
+
+        return $phone !== '' && (RecruitmentCandidate::where('contact_number', $phone)->exists() || User::where('phone', $phone)->exists());
+    }
+
+    /**
+     * Throw if a contact number is already used by a candidate or linked user.
+     */
+    private function assertPhoneAvailable(string $phone, ?RecruitmentCandidate $except = null): void
+    {
+        $duplicate = RecruitmentCandidate::where('contact_number', $phone)
+            ->when($except !== null, fn ($query) => $query->where('id', '!=', $except->id))
+            ->exists();
+
+        if ($duplicate || User::where('phone', $phone)->exists()) {
+            throw ValidationException::withMessages([
+                'contact_number' => ['The contact number has already been taken.'],
+            ]);
+        }
     }
 
     /** @param array<int, string|null> $row @param array<int, string> $headerMap @return array<string, string> */

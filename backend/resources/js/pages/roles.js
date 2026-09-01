@@ -126,12 +126,12 @@ export async function render() {
     const root = content('');
     root.innerHTML = `
       <div class="mx-auto max-w-7xl">
-        <div class="mb-4 flex items-end justify-between">
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 class="text-xl font-semibold text-slate-900">Roles &amp; Permissions</h1>
             <p class="mt-0.5 text-sm text-slate-500">${total} active system role${total === 1 ? '' : 's'} with granular permission controls.</p>
           </div>
-          ${can.create ? '<button id="new-role" class="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 active:bg-primary-800"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>New Role</button>' : ''}
+          ${can.create ? '<button id="new-role" class="inline-flex w-fit items-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 active:bg-primary-800"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>New Role</button>' : ''}
         </div>
 
         <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -166,7 +166,7 @@ export async function render() {
     } else {
         countEl.textContent = `${data.meta.total} role${data.meta.total === 1 ? '' : 's'}`;
         list.innerHTML = `
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
+<table class="ui-sticky-col min-w-[640px] divide-y divide-slate-200 text-sm">
           <thead>
             <tr class="bg-slate-50/70 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
               <th class="px-4 py-3 font-semibold">Role</th>
@@ -260,7 +260,7 @@ function openDeleteModal(id, name) {
     modal.id = 'role-delete-modal';
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm';
     modal.innerHTML = `
-      <div class="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
+      <div class="w-full max-h-[calc(100dvh-2rem)] overflow-y-auto max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
         <div class="flex h-11 w-11 items-center justify-center rounded-full bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-100">
           <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
         </div>
@@ -304,7 +304,7 @@ function checkboxMarkup(perm, checked) {
 
 function renderMatrix(groupsHost, permissionGroups, currentPermIds) {
     const grid = document.createElement('div');
-    grid.className = 'overflow-hidden rounded-lg border border-slate-200';
+    grid.className = 'rounded-lg border border-slate-200';
 
     const headerCells = `<th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-500">Capability</th>` +
         COLUMNS.map(
@@ -343,7 +343,7 @@ function renderMatrix(groupsHost, permissionGroups, currentPermIds) {
         .join('');
 
     grid.innerHTML = `
-      <table class="min-w-full divide-y divide-slate-200 text-sm">
+      <table class="ui-sticky-col min-w-[720px] divide-y divide-slate-200 text-sm">
         <thead>
           <tr class="border-b border-slate-200 bg-slate-50/70 text-left text-xs uppercase tracking-wide text-slate-500">${headerCells}</tr>
         </thead>

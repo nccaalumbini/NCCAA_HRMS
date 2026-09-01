@@ -4,7 +4,7 @@ import { esc, toast } from '../ui';
 export function renderLogin() {
     const app = document.getElementById('app');
     app.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="min-h-screen flex items-center justify-center px-4 py-8">
       <div class="w-full max-w-sm">
         <div class="text-center mb-8">
           <div class="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-indigo-600 text-white font-bold text-xl mb-3">N</div>

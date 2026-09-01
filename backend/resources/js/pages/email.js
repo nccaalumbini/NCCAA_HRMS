@@ -572,7 +572,7 @@ async function showCampaignModal(campaignId, can) {
 
             <div>
               <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Recipient Delivery Logs</h4>
-              <div class="border border-slate-200 rounded-lg overflow-hidden">
+              <div class="border border-slate-200 rounded-lg table-scroll">
                 <table class="min-w-full text-xs">
                   <thead class="bg-slate-50 text-left text-slate-500 font-medium">
                     <tr>
