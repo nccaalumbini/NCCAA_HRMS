@@ -58,6 +58,8 @@ class PermissionSeeder extends Seeder
                 'applications.review',
                 'applications.shortlist',
                 'applications.select',
+                'applications.manage',
+                'applications.notes.add',
             ],
             'notifications' => [
                 'notifications.view',

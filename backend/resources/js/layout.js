@@ -8,6 +8,7 @@ const NAV = [
     { hash: '#/roles', key: 'roles', label: 'Roles', icon: svgRoles(), permission: 'roles.view' },
     { hash: '#/cadets', key: 'cadets', label: 'Cadets', icon: svgCadets() },
     { hash: '#/recruitment', key: 'recruitment', label: 'Recruitment', icon: svgRecruitment(), permission: 'recruitment.view' },
+    { hash: '#/applications', key: 'applications', label: 'Applications', icon: svgApplications(), permission: 'applications.view' },
     { hash: '#/email', key: 'email', label: 'Email Campaigns', icon: svgMail(), permission: 'email.campaigns.view' },
 ];
 
@@ -127,7 +128,7 @@ export function shell(user) {
 
 export function setActive(key) {
     const nav = document.getElementById('nav');
-    const titles = { dashboard: 'Dashboard', users: 'Users', profile: 'Profile', roles: 'Roles', cadets: 'Cadets', recruitment: 'Recruitment' };
+    const titles = { dashboard: 'Dashboard', users: 'Users', profile: 'Profile', roles: 'Roles', cadets: 'Cadets', recruitment: 'Recruitment', applications: 'Applications', email: 'Email Campaigns' };
     const title = document.getElementById('page-title');
     if (title) {
         title.textContent = titles[key] || '';
@@ -177,4 +178,8 @@ function svgRecruitment() {
 
 function svgMail() {
     return '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>';
+}
+
+function svgApplications() {
+    return '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6M9 16h6M17 21h-5v-2h5a1 1 0 001-1V6a1 1 0 00-1-1h-5V3h5a3 3 0 013 3v12a3 3 0 01-3 3zm-10 2H4a2 2 0 01-2-2V5a2 2 0 012-2h3a1 1 0 010 2H4v14h3a1 1 0 010 2z"/></svg>';
 }

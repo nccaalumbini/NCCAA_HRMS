@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\Public\JobPortalController;
+use App\Http\Controllers\Api\V1\ApplicationController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CadetController;
 use App\Http\Controllers\Api\V1\CadetImportController;
@@ -9,6 +11,18 @@ use App\Http\Controllers\Api\V1\ReferenceController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
+
+/*
+| Public job application portal — no authentication required.
+| Write endpoints are rate-limited to prevent spam submissions.
+*/
+Route::get('/job-categories', [JobPortalController::class, 'categories'])->middleware('throttle:60,1');
+Route::get('/job-categories/{slug}', [JobPortalController::class, 'category'])->middleware('throttle:60,1');
+Route::get('/provinces', [JobPortalController::class, 'provinces'])->middleware('throttle:60,1');
+Route::get('/districts/{province}', [JobPortalController::class, 'districts'])->middleware('throttle:60,1');
+Route::get('/ncc-training-centers', [JobPortalController::class, 'trainingCenters'])->middleware('throttle:60,1');
+Route::get('/job-applications/check-cadet-number', [JobPortalController::class, 'checkCadetNumber'])->middleware('throttle:30,1');
+Route::post('/job-applications', [JobPortalController::class, 'store'])->middleware('throttle:5,10');
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])
@@ -65,6 +79,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/recruitment-candidates/{candidate}/promote', [RecruitmentCandidateController::class, 'promote'])->middleware('permission:recruitment.promote-to-cadet');
     Route::post('/recruitment-candidates/{candidate}/communication', [RecruitmentCandidateController::class, 'sendCommunication'])->middleware('permission:recruitment.communication.send');
     Route::get('/recruitment-candidates/{candidate}/communications', [RecruitmentCandidateController::class, 'communicationHistory'])->middleware('permission:recruitment.communication.view');
+
+    Route::get('/applications', [ApplicationController::class, 'index'])->middleware('permission:applications.view');
+    Route::get('/applications/stats', [ApplicationController::class, 'stats'])->middleware('permission:applications.view');
+    Route::get('/applications/{application}', [ApplicationController::class, 'show'])->middleware('permission:applications.view');
+    Route::patch('/applications/{application}/stage', [ApplicationController::class, 'changeStage'])->middleware('permission:applications.manage');
+    Route::post('/applications/{application}/notes', [ApplicationController::class, 'addNote'])->middleware('permission:applications.notes.add');
 
     Route::get('/email/settings', [EmailController::class, 'getSettings'])->middleware('permission:email.settings.view');
     Route::put('/email/settings', [EmailController::class, 'saveSettings'])->middleware('permission:email.settings.manage');

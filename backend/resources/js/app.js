@@ -7,6 +7,7 @@ import * as roles from './pages/roles';
 import * as cadets from './pages/cadets';
 import * as profile from './pages/profile';
 import * as recruitment from './pages/recruitment';
+import * as applications from './pages/applications';
 import * as email from './pages/email';
 
 const routes = {
@@ -16,6 +17,7 @@ const routes = {
     '#/roles': roles.render,
     '#/cadets': cadets.render,
     '#/recruitment': recruitment.render,
+    '#/applications': applications.render,
     '#/email': email.render,
     '#/login': renderLogin,
 };

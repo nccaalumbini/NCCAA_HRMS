@@ -18,6 +18,8 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             RankSeeder::class,
             GeographySeeder::class,
+            JobCategorySeeder::class,
+            NccTrainingCenterSeeder::class,
         ]);
 
         $this->createSuperAdmin();
